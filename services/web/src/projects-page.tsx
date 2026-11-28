@@ -16,6 +16,7 @@ import {
   TerminalWindowIcon,
   XIcon,
 } from "@phosphor-icons/react";
+import { thumbnailWidths } from "../../../shared/board-photo.js";
 import { mcpEndpoint } from "../../../shared/identity.js";
 import { BoardPhoto, type BoardSpec } from "./components/board-photo";
 import { agents, manufacturer } from "./components/landing-brands";
@@ -73,19 +74,12 @@ type PublicProjectSummary = {
   tags?: string[];
   author?: ProjectAuthor | null;
   owner?: ProjectOwner | null;
+  cover_image_url: string | null;
   boards: ProjectBoardSummary[];
 };
 
-type PublicProjectDetail = {
-  id: string;
-  name: string;
-  description: string;
-  repo_url: string | null;
-  repo_path: string | null;
-  upstream_url?: string | null;
-  tags?: string[];
-  author?: ProjectAuthor | null;
-  owner?: ProjectOwner | null;
+type PublicProjectDetail = Omit<PublicProjectSummary, "boards"> & {
+  images: { url: string | null }[];
   boards: {
     board_id: string;
     version: string;
@@ -257,6 +251,31 @@ function ProjectTagBadges({ tags }: { tags?: string[] }) {
       {isFactory && <span className="pj-tag-badge is-factory">Factory</span>}
       {isExample && <span className="pj-tag-badge is-example">Example</span>}
     </div>
+  );
+}
+
+function ProjectPreviewImage({
+  url,
+  alt,
+  sizes,
+  loading = "lazy",
+}: {
+  url: string;
+  alt: string;
+  sizes: string;
+  loading?: "lazy" | "eager";
+}) {
+  return (
+    <img
+      src={url}
+      srcSet={thumbnailWidths.project
+        .map((width) => `${url}?width=${width} ${width}w`)
+        .join(", ")}
+      sizes={sizes}
+      alt={alt}
+      loading={loading}
+      decoding="async"
+    />
   );
 }
 
@@ -560,6 +579,11 @@ function ProjectDetailView({
 
   const source = projectSourceUrl(project);
   const defaultBoardId = project.boards[0]?.board_id ?? "";
+  const images = [
+    ...new Set(project.images.flatMap(({ url }) => (url ? [url] : []))),
+  ];
+  const cover = project.cover_image_url ?? images[0];
+  const screenshots = images.filter((url) => url !== cover);
 
   return (
     <main className="bh-detail-shell">
@@ -581,7 +605,10 @@ function ProjectDetailView({
         </div>
       </nav>
 
-      <section className="pj-detail-header" aria-labelledby="project-detail-title">
+      <section
+        className={`pj-detail-header${cover ? " has-cover" : ""}`}
+        aria-labelledby="project-detail-title"
+      >
         <div className="pj-detail-main">
           {Boolean(project.author || project.owner?.name || project.tags?.length) && (
             <div className="pj-detail-meta">
@@ -650,7 +677,52 @@ function ProjectDetailView({
             )}
           </div>
         </div>
+        {cover && (
+          <a
+            className="pj-detail-cover pj-image-frame"
+            href={cover}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ProjectPreviewImage
+              url={cover}
+              alt={`${project.name} cover image`}
+              sizes="(max-width: 760px) 85vw, (max-width: 1480px) 35vw, 500px"
+              loading="eager"
+            />
+          </a>
+        )}
       </section>
+
+      {screenshots.length > 0 && (
+        <section
+          className="bh-projects-section"
+          aria-labelledby="project-gallery-heading"
+        >
+          <div className="bh-section-head">
+            <h2 id="project-gallery-heading" className="bh-section-title">
+              Gallery
+            </h2>
+          </div>
+          <div className="pj-gallery-grid">
+            {screenshots.map((url, index) => (
+              <a
+                key={url}
+                className="pj-image-frame"
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ProjectPreviewImage
+                  url={url}
+                  alt={`${project.name} gallery image ${index + 1}`}
+                  sizes="(max-width: 400px) 45vw, 220px"
+                />
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section
         className="bh-projects-section"
@@ -1309,6 +1381,15 @@ export default function ProjectsPage({
                             href={`/projects/${project.id}`}
                             onClick={(e) => onProjectLinkClick(e, project.id)}
                           >
+                            {project.cover_image_url && (
+                              <div className="pj-image-frame">
+                                <ProjectPreviewImage
+                                  url={project.cover_image_url}
+                                  alt=""
+                                  sizes="(max-width: 680px) 85vw, (max-width: 1080px) 42vw, (max-width: 1480px) 28vw, 420px"
+                                />
+                              </div>
+                            )}
                             <div className="pj-card-head">
                               <h2 className="pj-card-name">{project.name}</h2>
                               <ArrowRightIcon
