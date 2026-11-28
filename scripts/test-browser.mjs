@@ -4,6 +4,7 @@ import { parseNvs } from "../services/api/src/nvs.js";
 import assert from "node:assert/strict";
 import { importPKCS8, SignJWT } from "jose";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 const origin = process.env.TEST_SITE_URL;
 if (!origin || !["localhost", "127.0.0.1"].includes(new URL(origin).hostname))
@@ -137,10 +138,91 @@ try {
   await page.getByRole("link", { name: /StopWatch/ }).first().click();
   await page.waitForURL(origin + "/boards/m5stack/stopwatch");
 
-  // Projects directory navigation from masthead.
+  // Directory shows only the cover. Detail shows the cover and the other images
+  // in publication order, including when the cover isn't first in the list.
+  const projectId = randomUUID();
+  const imageBase = `https://cdn.esphub.ai/projects/${projectId}/images/`;
+  const screenshots = ["1", "2", "3"].map(
+    (n) => imageBase + n.repeat(64) + ".webp",
+  );
+  const pictured = {
+    id: projectId,
+    name: "Project with screenshots",
+    description: "A project with a cover and two screenshots.",
+    cover_image_url: screenshots[1],
+    boards: [],
+  };
+  const noImages = {
+    ...pictured,
+    id: randomUUID(),
+    name: "Project without screenshots",
+    description: "A headless project.",
+    cover_image_url: null,
+  };
+  await page.route(origin + "/backend/projects?*", (route) =>
+    route.fulfill({
+      json: {
+        items: [pictured, noImages],
+        total: 2,
+        total_pages: 1,
+        facets: { vendors: [], socs: [] },
+      },
+    }),
+  );
+  await page.route(origin + "/backend/projects/" + pictured.id, (route) =>
+    route.fulfill({
+      json: { ...pictured, images: screenshots.map((url) => ({ url })) },
+    }),
+  );
+  await page.route(origin + "/backend/projects/" + noImages.id, (route) =>
+    route.fulfill({ json: { ...noImages, images: [] } }),
+  );
+  await page.route(imageBase + "**", (route) =>
+    route.fulfill({
+      path: fileURLToPath(new URL("../tests/fixtures/board-photo.webp", import.meta.url)),
+      contentType: "image/webp",
+    }),
+  );
   await page.getByRole("link", { name: "Projects", exact: true }).click();
   await page.waitForURL(origin + "/projects");
   await page.getByRole("heading", { name: "Runnable ESP32 Projects." }).waitFor();
+  const picturedLink = page.getByRole("link", {
+    name: /^Project with screenshots/,
+  });
+  const cardCover = picturedLink.locator("img");
+  await cardCover.scrollIntoViewIfNeeded();
+  assert.equal(await cardCover.getAttribute("src"), pictured.cover_image_url);
+  await cardCover.evaluate((img) => img.decode());
+  const noImagesLink = page.getByRole("link", {
+    name: /^Project without screenshots/,
+  });
+  assert.equal(await noImagesLink.locator("img").count(), 0);
+
+  await cardCover.click();
+  await page.waitForURL(origin + "/projects/" + pictured.id);
+  const detailCover = page.getByRole("link", {
+    name: pictured.name + " cover image",
+  });
+  assert.equal(await detailCover.getAttribute("href"), pictured.cover_image_url);
+  await detailCover.getByRole("img").evaluate((img) => img.decode());
+  const galleryLinks = page.getByRole("region", { name: "Gallery" }).getByRole("link");
+  assert.deepEqual(
+    await galleryLinks.evaluateAll((links) => links.map((link) => link.href)),
+    [screenshots[0], screenshots[2]],
+  );
+  for (const link of await galleryLinks.all()) {
+    await link.scrollIntoViewIfNeeded();
+    await link.getByRole("img").evaluate((img) => img.decode());
+  }
+
+  await page
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .getByRole("link", { name: "Projects" })
+    .click();
+  await noImagesLink.click();
+  await page.getByRole("heading", { name: noImages.name }).waitFor();
+  assert.equal(await page.getByRole("region", { name: "Gallery" }).count(), 0);
+  assert.equal(await page.locator(".pj-detail-cover").count(), 0);
 
   // Unauthenticated workspace redirect.
   await page.getByRole("link", { name: "Open workspace" }).click();
@@ -262,7 +344,7 @@ try {
   await page.waitForURL(origin + "/signed-out");
   assert.deepEqual(errors, []);
   console.log(
-    "PASS landing, board gallery, hosted auth, device console, live status, MCP prompts",
+    "PASS landing, board gallery, project images, hosted auth, device console, live status, MCP prompts",
   );
 } finally {
   mcu?.close();

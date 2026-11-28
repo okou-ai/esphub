@@ -209,6 +209,27 @@ a.pj-author-chip:hover {
   flex: 1;
 }
 
+.pj-image-frame {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 10;
+  background: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.pj-image-frame img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+a.pj-image-frame:hover {
+  border-color: var(--lime);
+}
+
 .pj-card-head {
   display: flex;
   align-items: flex-start;
@@ -348,6 +369,17 @@ a.pj-author-chip:hover {
   padding: clamp(24px, 3.2vw, 40px);
 }
 
+.pj-detail-header.has-cover {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(20px, 3vw, 40px);
+}
+
+.pj-detail-cover {
+  width: 100%;
+}
+
 .pj-detail-main {
   max-width: 780px;
   display: flex;
@@ -382,6 +414,12 @@ a.pj-author-chip:hover {
   gap: 10px;
   flex-wrap: wrap;
   padding-top: 6px;
+}
+
+.pj-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
 }
 
 /* Supported Boards Grid on Project Detail */
@@ -447,6 +485,12 @@ a.pj-author-chip:hover {
 @media (max-width: 1080px) {
   .pj-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .pj-detail-header.has-cover {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
